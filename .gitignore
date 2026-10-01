@@ -26,3 +26,9 @@ docs/superpowers/
 AuthKey_*
 release.env
 .netrc
+
+# Windows port build output
+windows/**/bin/
+windows/**/obj/
+windows/artifacts/
+*.user
