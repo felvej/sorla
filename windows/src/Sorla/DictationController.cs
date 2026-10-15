@@ -27,7 +27,7 @@ public sealed class DictationController : IDisposable
 
     private readonly Settings settings;
     private readonly ModelHost model;
-    private readonly Func<IAudioSource> createSource;
+    private readonly MicrophoneService microphone;
     private readonly RecordingIndicator indicator;
     private readonly Feedback feedback;
     private readonly SynchronizationContext context;
@@ -49,11 +49,11 @@ public sealed class DictationController : IDisposable
     // Raised after the key is released, so a dialog never steals focus mid-dictation.
     public event Action<Issue>? IssueRaised;
 
-    public DictationController(Settings settings, ModelHost model, Func<IAudioSource> createSource, RecordingIndicator indicator, Feedback feedback)
+    public DictationController(Settings settings, ModelHost model, MicrophoneService microphone, RecordingIndicator indicator, Feedback feedback)
     {
         this.settings = settings;
         this.model = model;
-        this.createSource = createSource;
+        this.microphone = microphone;
         this.indicator = indicator;
         this.feedback = feedback;
         context = SynchronizationContext.Current ?? throw new InvalidOperationException("DictationController needs a UI thread.");
@@ -75,19 +75,48 @@ public sealed class DictationController : IDisposable
             return;
         }
 
-        var recording = new Capture(createSource());
-        recording.SpectrumReady += OnSpectrumReady;
+        var wasOpen = microphone.IsOpen;
+        var recording = microphone.Begin();
         capture = recording;
-        _ = WatchMicrophoneStartAsync(recording);
-
         IsRecording = true;
         recordingClock = Stopwatch.StartNew();
         limitWarned = false;
         limitTimer.Start();
+        recording.SpectrumReady += OnSpectrumReady;
+        recording.Failed += r => context.Post(_ => OnMicrophoneFailed(r), null);
+        if (recording.IsReady)
+        {
+            OnMicrophoneReady(recording);
+        }
+        else
+        {
+            // Until the device delivers audio there is nothing to hear yet, so the tone waits for it.
+            indicator.ShowPreparing();
+            recording.Ready += r => context.Post(_ => OnMicrophoneReady(r), null);
+        }
+        Log.Info(wasOpen ? "recording started (microphone ready)" : "recording started (opening microphone)");
+        StateChanged?.Invoke();
+    }
+
+    // The tone and the red dot mean "speak now", so they come when the microphone is really listening.
+    private void OnMicrophoneReady(Capture recording)
+    {
+        if (recording != capture) return;
+        var waited = recordingClock?.ElapsedMilliseconds ?? 0;
         feedback.Start();
         indicator.ShowRecording();
-        Log.Info("recording started");
-        StateChanged?.Invoke();
+        if (waited > 0) Log.Info($"microphone ready after {waited} ms");
+    }
+
+    // A microphone that fails while the key is still held says so once it is let go (TrayApp raises it);
+    // if nothing is held (toggle mode, or started from the menu) it says so at once.
+    private void OnMicrophoneFailed(Capture recording)
+    {
+        if (recording.Failure is { } error) Log.Error("microphone failed", error);
+        if (recording != capture) return;
+        Cancel(audible: false);
+        pendingIssue = Issue.NoMicrophone;
+        if (!Native.IsKeyDown(settings.TriggerKey.VirtualKey())) RaisePendingIssue();
     }
 
     public async void Finish()
@@ -103,15 +132,26 @@ public sealed class DictationController : IDisposable
         capture = null;
         pendingJobs++;
         StateChanged?.Invoke();
-        // The last syllable is still on its way through the audio stack when the key comes up.
-        await Task.Delay(TailDuration);
-        var audio = await recording.StopAsync();
-        if (recording.Started.IsFaulted)
+        if (recording.IsReady)
         {
+            // The last syllable is still on its way through the audio stack when the key comes up.
+            await Task.Delay(TailDuration);
+        }
+        var audio = microphone.End(recording);
+        if (!recording.IsReady)
+        {
+            // Let go before the microphone was listening: there is nothing to transcribe, and the user should know why.
             pendingJobs--;
-            indicator.HideIndicator();
             StateChanged?.Invoke();
-            IssueRaised?.Invoke(Issue.NoMicrophone);
+            if (recording.Failure == null)
+            {
+                indicator.ShowMessage(Strings.Get("note.micTooLate"), TimeSpan.FromSeconds(3));
+                Log.Info("released before the microphone was ready");
+            }
+            else
+            {
+                indicator.HideIndicator();
+            }
             return;
         }
         feedback.Stop();
@@ -130,8 +170,14 @@ public sealed class DictationController : IDisposable
         if (!IsRecording) return;
         StopTimers();
         IsRecording = false;
-        capture?.Abandon();
+        var recording = capture;
         capture = null;
+        if (recording != null)
+        {
+            // Only a start the user heard gets a cancel tone.
+            audible &= recording.IsReady;
+            microphone.Abandon(recording);
+        }
         if (audible) feedback.Cancel();
         if (pendingJobs == 0) indicator.HideIndicator();
         Log.Info("recording cancelled");
@@ -154,25 +200,6 @@ public sealed class DictationController : IDisposable
         var spectrum = recording.ReadSpectrum(analyzer);
         if (recording == capture) indicator.UpdateSpectrum(spectrum);
     }, null);
-
-    // A microphone that fails to open while the key is still held says so once it is let go (TrayApp raises it);
-    // if nothing is held (toggle mode, or started from the menu) it says so at once.
-    private async Task WatchMicrophoneStartAsync(Capture recording)
-    {
-        try
-        {
-            await recording.Started;
-        }
-        catch (Exception e)
-        {
-            Log.Error("microphone start failed", e);
-            // Finish() reports it itself if the recording already ended.
-            if (recording != capture) return;
-            Cancel(audible: false);
-            pendingIssue = Issue.NoMicrophone;
-            if (!Native.IsKeyDown(settings.TriggerKey.VirtualKey())) RaisePendingIssue();
-        }
-    }
 
     private async Task<(string? Text, Issue? Issue, TimeSpan Elapsed)> TranscribeAsync((float[] Samples, float Peak) audio)
     {
@@ -274,11 +301,13 @@ public sealed class DictationController : IDisposable
         }
     }
 
-    // Locking the PC or putting it to sleep forgets the last text and calls off a recording in progress.
+    // Locking the PC or putting it to sleep forgets the last text, calls off a recording in progress and closes the
+    // microphone, so nothing is listening while nobody is there.
     public void Forget()
     {
         recent.Forget();
         Cancel(audible: false);
+        microphone.Close();
     }
 
     public void SettingsChanged()
@@ -312,6 +341,6 @@ public sealed class DictationController : IDisposable
     public void Dispose()
     {
         limitTimer.Dispose();
-        capture?.Abandon();
+        if (capture != null) microphone.Abandon(capture);
     }
 }

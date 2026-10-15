@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 using Sorla.Core;
+using Sorla.Core.Audio;
 using Sorla.Core.Dictation;
 using Sorla.Core.Transcription;
 using Sorla.Platform;
@@ -15,6 +16,10 @@ public sealed class TrayApp : ApplicationContext
     private readonly ModelInstall install;
     private readonly RecordingIndicator indicator = new();
     private readonly Feedback feedback = new();
+    private readonly MicrophoneService microphone;
+    private readonly Func<string?, IAudioSource> createSource;
+    private string appliedMicrophoneId;
+    private MicrophoneReadiness appliedReadiness;
     private readonly DictationController dictation;
     private readonly InputHook hook;
     private readonly HotKeyWindow hotKeys = new();
@@ -28,13 +33,17 @@ public sealed class TrayApp : ApplicationContext
     private WelcomeForm? welcomeForm;
     private TrayMark currentMark = (TrayMark)(-1);
 
-    public TrayApp(Settings settings, Func<IAudioSource> createSource, string? pasteGuard = null)
+    public TrayApp(Settings settings, Func<string?, IAudioSource> createSource, string? pasteGuard = null)
     {
         this.settings = settings;
         model = new ModelHost(settings);
         install = new ModelInstall(settings, model);
         feedback.Enabled = settings.PlaySounds;
-        dictation = new DictationController(settings, model, createSource, indicator, feedback);
+        this.createSource = createSource;
+        microphone = new MicrophoneService(() => createSource(settings.MicrophoneId)) { KeepWarm = settings.MicrophoneReadiness.KeepWarm() };
+        appliedMicrophoneId = settings.MicrophoneId;
+        appliedReadiness = settings.MicrophoneReadiness;
+        dictation = new DictationController(settings, model, microphone, indicator, feedback);
         dictation.PasteOnlyIntoProcess = pasteGuard;
         gesture = new PushToTalkGesture(settings.RecordingMode);
 
@@ -79,6 +88,7 @@ public sealed class TrayApp : ApplicationContext
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         model.Load();
+        PrepareMicrophoneIfAlways();
         UpdateStatus();
         if (!settings.HasCompletedOnboarding || !model.IsInstalled) ShowWelcome();
     }
@@ -125,6 +135,17 @@ public sealed class TrayApp : ApplicationContext
                 dictation.Cancel(audible: false);
                 break;
         }
+    }
+
+    // Test only (with --fake-mic): one dictation started and stopped from code, without any key presses, so the whole
+    // pipeline can be watched (for example for network use) without touching the user's keyboard or focus.
+    public async void AutoDictate(TimeSpan length)
+    {
+        while (model.State == ModelState.Loading) await Task.Delay(200);
+        Log.Info($"auto-dictate: model {model.State}");
+        ToggleFromMenu();
+        await Task.Delay(length);
+        ToggleFromMenu();
     }
 
     private void ToggleFromMenu()
@@ -230,8 +251,27 @@ public sealed class TrayApp : ApplicationContext
         hook.ForgetTriggerState();
         dictation.Cancel(audible: false);
         gesture = new PushToTalkGesture(settings.RecordingMode);
+        microphone.KeepWarm = settings.MicrophoneReadiness.KeepWarm();
+        if (appliedMicrophoneId != settings.MicrophoneId)
+        {
+            appliedMicrophoneId = settings.MicrophoneId;
+            microphone.Reconfigure(() => createSource(settings.MicrophoneId));
+        }
+        else if (appliedReadiness != settings.MicrophoneReadiness && settings.MicrophoneReadiness != MicrophoneReadiness.Always)
+        {
+            // A shorter readiness takes effect now rather than after the old timer.
+            microphone.Close();
+        }
+        appliedReadiness = settings.MicrophoneReadiness;
+        PrepareMicrophoneIfAlways();
         dictation.SettingsChanged();
         UpdateStatus();
+    }
+
+    // "Always ready" keeps the microphone open from launch and after every unlock or wake.
+    private void PrepareMicrophoneIfAlways()
+    {
+        if (settings.MicrophoneReadiness == MicrophoneReadiness.Always) microphone.Prepare();
     }
 
     public void ShowWelcome()
@@ -265,6 +305,10 @@ public sealed class TrayApp : ApplicationContext
             hook.ForgetTriggerState();
             dictation.Forget();
         }
+        else if (e.Reason is SessionSwitchReason.SessionUnlock or SessionSwitchReason.ConsoleConnect or SessionSwitchReason.RemoteConnect)
+        {
+            PrepareMicrophoneIfAlways();
+        }
     }
 
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
@@ -274,6 +318,10 @@ public sealed class TrayApp : ApplicationContext
             gesture.Reset();
             hook.ForgetTriggerState();
             dictation.Forget();
+        }
+        else if (e.Mode == PowerModes.Resume)
+        {
+            PrepareMicrophoneIfAlways();
         }
     }
 
@@ -285,6 +333,7 @@ public sealed class TrayApp : ApplicationContext
         hook.Dispose();
         hotKeys.Dispose();
         dictation.Dispose();
+        microphone.Dispose();
         tray.Visible = false;
         tray.Dispose();
         indicator.Dispose();

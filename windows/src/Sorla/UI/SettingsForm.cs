@@ -72,7 +72,35 @@ public sealed class SettingsForm : Form
         layout.Controls.Add(new Label { Text = Strings.Get("settings.mode"), AutoSize = true, Anchor = AnchorStyles.Left }, 0, 2);
         layout.Controls.Add(mode, 1, 2);
 
-        var row = 3;
+        // Microphone: Windows' default (named, so it is clear which one that is now) or a specific device.
+        var microphone = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = LogicalToDeviceUnits(400), Anchor = AnchorStyles.Left };
+        var defaultName = MicrophoneSource.DefaultDeviceName ?? "-";
+        microphone.Items.Add(new MicrophoneChoice("", Strings.Format("settings.microphoneDefault", defaultName)));
+        foreach (var device in MicrophoneSource.Devices()) microphone.Items.Add(new MicrophoneChoice(device.Id, device.Name));
+        var chosenIndex = microphone.Items.Cast<MicrophoneChoice>().ToList().FindIndex(c => c.Id == settings.MicrophoneId);
+        microphone.SelectedIndex = Math.Max(0, chosenIndex);
+        microphone.SelectedIndexChanged += (_, _) =>
+        {
+            settings.MicrophoneId = ((MicrophoneChoice)microphone.SelectedItem!).Id;
+            Save();
+        };
+
+        var readiness = Combo(Enum.GetValues<MicrophoneReadiness>().Select(r => (object)new Choice<MicrophoneReadiness>(r, r.DisplayName())), settings.MicrophoneReadiness);
+        readiness.SelectedIndexChanged += (_, _) =>
+        {
+            settings.MicrophoneReadiness = ((Choice<MicrophoneReadiness>)readiness.SelectedItem!).Value;
+            Save();
+        };
+        var readinessHelp = new Label { Text = Strings.Get("settings.readyHelp"), AutoSize = true, MaximumSize = new Size(LogicalToDeviceUnits(400), 0), ForeColor = Color.DimGray, Margin = new Padding(3, 0, 3, 8) };
+
+        layout.Controls.Add(new Label { Text = Strings.Get("settings.microphone"), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 10, 3, 3) }, 0, 3);
+        microphone.Margin = new Padding(3, 8, 3, 3);
+        layout.Controls.Add(microphone, 1, 3);
+        layout.Controls.Add(new Label { Text = Strings.Get("settings.ready"), AutoSize = true, Anchor = AnchorStyles.Left }, 0, 4);
+        layout.Controls.Add(readiness, 1, 4);
+        layout.Controls.Add(readinessHelp, 1, 5);
+
+        var row = 6;
         foreach (var (key, get, set) in new (string, Func<bool>, Action<bool>)[]
         {
             ("settings.keepClipboard", () => settings.KeepClipboardContent, v => settings.KeepClipboardContent = v),
@@ -128,6 +156,11 @@ public sealed class SettingsForm : Form
         foreach (var item in items) combo.Items.Add(item);
         combo.SelectedIndex = Math.Max(0, combo.Items.Cast<Choice<T>>().ToList().FindIndex(c => c.Value.Equals(selected)));
         return combo;
+    }
+
+    private sealed record MicrophoneChoice(string Id, string Name)
+    {
+        public override string ToString() => Name;
     }
 
     private sealed record Choice<T>(T Value, string Name)

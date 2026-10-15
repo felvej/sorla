@@ -1,65 +1,97 @@
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using Sorla.Core.Audio;
 using Sorla.Core.Transcription;
 
 namespace Sorla.Platform;
 
-// The microphone side of a recording, so a dictation can be driven from a file in tests.
-public interface IAudioSource : IDisposable
-{
-    // Frames are mono float samples at 16 kHz, delivered on a background thread.
-    event Action<float[]>? Frames;
-    event Action<Exception?>? Stopped;
-    void Start();
-    void Stop();
-}
+public sealed record MicrophoneDevice(string Id, string Name);
 
-// Windows' own mixer converts whatever the device runs at to 16 kHz mono, which is what the model wants.
-public sealed class MicrophoneSource : IAudioSource
+// A WASAPI capture stream; Windows' audio engine converts whatever the device runs at to 16 kHz mono.
+public sealed class MicrophoneSource(string? deviceId) : IAudioSource
 {
-    private WaveIn? waveIn;
+    private WasapiRecorder? recorder;
 
     public event Action<float[]>? Frames;
     public event Action<Exception?>? Stopped;
 
-    public static bool HasDevice => WaveIn.DeviceCount > 0;
+    public static IReadOnlyList<MicrophoneDevice> Devices()
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        return enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+            .Select(d => new MicrophoneDevice(d.ID, d.FriendlyName))
+            .ToList();
+    }
 
-    public static string? DefaultDeviceName => WaveIn.DeviceCount > 0 ? WaveIn.GetCapabilities(0).ProductName : null;
+    public static MicrophoneDevice? Default()
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        if (!enumerator.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Console)) return null;
+        var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+        return new MicrophoneDevice(device.ID, device.FriendlyName);
+    }
+
+    // The chosen device if it is still there, otherwise Windows' default.
+    public static MicrophoneDevice? Resolve(string? deviceId) =>
+        (string.IsNullOrEmpty(deviceId) ? null : Devices().FirstOrDefault(d => d.Id == deviceId)) ?? Default();
+
+    public static string? DefaultDeviceName => Default()?.Name;
 
     public void Start()
     {
-        Stop();
-        var device = new WaveIn
-        {
-            // -1 is WAVE_MAPPER: the default recording device chosen in Windows sound settings.
-            DeviceNumber = -1,
-            WaveFormat = new WaveFormat(PianissimoTranscriber.SampleRate, 16, 1),
-            BufferMilliseconds = 30,
-            NumberOfBuffers = 4,
-        };
-        device.DataAvailable += (_, e) =>
-        {
-            var count = e.BytesRecorded / 2;
-            var samples = new float[count];
-            for (var i = 0; i < count; i++) samples[i] = BitConverter.ToInt16(e.Buffer, i * 2) / 32768f;
-            Frames?.Invoke(samples);
-        };
-        device.RecordingStopped += (_, e) => Stopped?.Invoke(e.Exception);
-        waveIn = device;
-        // Throws MmException when there is no device or Windows denies desktop apps the microphone.
-        device.StartRecording();
+        using var enumerator = new MMDeviceEnumerator();
+        var device = (string.IsNullOrEmpty(deviceId) ? null : TryGet(enumerator, deviceId))
+            ?? (enumerator.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Console)
+                ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console)
+                : throw new InvalidOperationException("No microphone is connected."));
+        var built = new WasapiRecorderBuilder()
+            .WithDevice(device)
+            .WithSharedMode()
+            .WithEventSync()
+            .WithFormat(new WaveFormat(PianissimoTranscriber.SampleRate, 16, 1))
+            .WithBufferLength(20)
+            .Build();
+        built.DataAvailable += OnData;
+        built.RecordingStopped += (_, e) => Stopped?.Invoke(e.Exception);
+        recorder = built;
+        // Throws when Windows denies desktop apps the microphone or the device is in use exclusively.
+        built.StartRecording();
     }
 
-    public void Stop()
+    private void OnData(ReadOnlySpan<byte> buffer, AudioClientBufferFlags flags, long devicePosition, long qpcPosition)
     {
-        var device = waveIn;
-        waveIn = null;
+        var count = buffer.Length / 2;
+        if (count == 0) return;
+        var samples = new float[count];
+        // A silent packet (a glitch, or the device starting up) carries no data worth reading.
+        if ((flags & AudioClientBufferFlags.Silent) == 0)
+        {
+            for (var i = 0; i < count; i++) samples[i] = BitConverter.ToInt16(buffer.Slice(i * 2, 2)) / 32768f;
+        }
+        Frames?.Invoke(samples);
+    }
+
+    private static MMDevice? TryGet(MMDeviceEnumerator enumerator, string id)
+    {
+        try
+        {
+            var device = enumerator.GetDevice(id);
+            return device.State == DeviceState.Active ? device : null;
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            return null;
+        }
+    }
+
+    public void Dispose()
+    {
+        var device = recorder;
+        recorder = null;
         if (device == null) return;
-        try { device.StopRecording(); } catch (NAudio.MmException) { }
+        try { device.StopRecording(); } catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
         device.Dispose();
     }
-
-    public void Dispose() => Stop();
 }
 
 // Plays a WAV file in real time as if it were spoken into the microphone, then silence. For automated tests only.
@@ -79,6 +111,7 @@ public sealed class FileAudioSource(string path) : IAudioSource
         return Resampler.Resample(audio.Samples, audio.SampleRate, PianissimoTranscriber.SampleRate);
     }
 
+    // Plays from the start each time the device is opened, like a person who starts talking at the press.
     public void Start()
     {
         lock (gate)
@@ -103,15 +136,12 @@ public sealed class FileAudioSource(string path) : IAudioSource
         Frames?.Invoke(chunk);
     }
 
-    public void Stop()
+    public void Dispose()
     {
         lock (gate)
         {
             timer?.Dispose();
             timer = null;
         }
-        Stopped?.Invoke(null);
     }
-
-    public void Dispose() => Stop();
 }

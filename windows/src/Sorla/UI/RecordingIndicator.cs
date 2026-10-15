@@ -34,6 +34,8 @@ public sealed class RecordingIndicator : Form
     private DateTime messageUntil;
     private bool warning;
     private bool muted;
+    // Pressed, but the microphone is not listening yet: a grey ring instead of the red dot, and no tone.
+    private bool preparing;
     private Screen? screen;
 
     public RecordingIndicator()
@@ -59,8 +61,11 @@ public sealed class RecordingIndicator : Form
 
     public IndicatorState State => state;
 
-    public void ShowRecording()
+    public void ShowPreparing() => ShowRecording(preparing: true);
+
+    public void ShowRecording(bool preparing = false)
     {
+        this.preparing = preparing;
         warning = false;
         muted = false;
         smoother.Reset();
@@ -142,8 +147,9 @@ public sealed class RecordingIndicator : Form
             switch (state)
             {
                 case IndicatorState.Recording:
-                    DrawDot(g, scale, h);
-                    DrawBars(g, scale, w, h, VisualizerBars.Magnitudes(bands, Time, BarCount), warning || muted ? 0.35f : 1f);
+                    DrawDot(g, scale, h, preparing);
+                    DrawBars(g, scale, w, h, preparing ? new float[BarCount] : VisualizerBars.Magnitudes(bands, Time, BarCount),
+                        preparing || warning || muted ? 0.35f : 1f);
                     break;
                 case IndicatorState.Transcribing:
                     var shimmer = VisualizerBars.Shimmer(Time, BarCount);
@@ -184,9 +190,16 @@ public sealed class RecordingIndicator : Form
         return path;
     }
 
-    private static void DrawDot(Graphics g, float scale, int h)
+    private static void DrawDot(Graphics g, float scale, int h, bool preparing)
     {
         var size = 8 * scale;
+        if (preparing)
+        {
+            var fade = 0.45f + 0.35f * (float)Math.Sin(Time * 8);
+            using var ring = new Pen(Color.FromArgb((int)(255 * fade), 200, 200, 200), 1.6f * scale);
+            g.DrawEllipse(ring, 16 * scale, (h - size) / 2, size, size);
+            return;
+        }
         var pulse = 0.75f + 0.25f * (float)Math.Sin(Time * 4);
         using var brush = new SolidBrush(Color.FromArgb((int)(255 * pulse), 255, 59, 48));
         g.FillEllipse(brush, 16 * scale, (h - size) / 2, size, size);

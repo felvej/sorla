@@ -21,8 +21,13 @@ public sealed class PianissimoTranscriber : ITranscriber
     private readonly int stateSize;
     private readonly object gate = new();
 
+    // Official ONNX Runtime builds emit telemetry events (through ETW on Windows, which Windows may upload).
+    // Turned off before any session exists; nothing about the audio or text is ever in them, but nothing is sent.
+    public static void DisableTelemetry() => OrtEnv.Instance().DisableTelemetryEvents();
+
     public PianissimoTranscriber(string modelDirectory, ModelVariant variant = ModelVariant.Int8, int? threads = null)
     {
+        DisableTelemetry();
         var options = new SessionOptions
         {
             GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,

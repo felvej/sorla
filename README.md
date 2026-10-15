@@ -14,6 +14,7 @@ The original Mac app and its documentation are unchanged in this repository (`So
 - **Your key.** Right Ctrl by default. Right Alt (AltGr), Right Shift or Scroll Lock instead.
 - **Shortcuts still work.** Right Ctrl+C, Ctrl+click and so on call the dictation off instead of recording. Esc cancels a dictation.
 - **A small indicator** at the top of the screen with a live waveform while you speak. It never takes focus.
+- **No lost first words.** The start tone and the red dot come when the microphone is actually listening (a grey ring means it is still opening). Opening takes about 0.2 s for a built-in microphone and over a second for Bluetooth headphones, so by default the microphone stays ready for a minute after each dictation: the next one starts at once and includes the last 0.3 s before the key went down. Choose Off, 1 minute, 5 minutes or Always in Settings, and which microphone to use. While it is ready Windows shows the microphone as in use and Bluetooth headphones stay in headset mode; only the last 0.3 s is held, in memory.
 - **Paste Last** with Ctrl+Alt+V pastes the most recent text again. It is kept in memory for five minutes and forgotten at once when you lock the PC or it goes to sleep. Turn off *Keep last transcription* and nothing is kept.
 - **Your clipboard is kept.** Whatever you had copied is put back after Sorla pastes. Dictated text is marked so it stays out of Win+V clipboard history and cloud clipboard sync.
 - **Never pastes into the wrong window.** If you switch windows before the text is ready, it is put on the clipboard instead, with a note on the indicator.
@@ -46,6 +47,19 @@ To install the model without Sorla downloading it (for example on a PC without i
 Your voice and your text never leave your PC. Audio is held in memory only while it is transcribed and never written to disk. The log (`%LOCALAPPDATA%\Sorla\sorla.log`) holds timings and errors, never what you said.
 
 Sorla uses the network for one thing only: downloading the speech model from Hugging Face, when you click Download. There is no update check, no telemetry and no other network traffic.
+
+Two things in Windows could otherwise carry data out, and Sorla switches both off for itself at launch:
+
+- **ONNX Runtime telemetry.** Official ONNX Runtime builds emit usage events through Windows' diagnostics system (ETW), which Windows may upload depending on your diagnostic data setting. Sorla calls `DisableTelemetryEvents()` before loading the model.
+- **Windows Error Reporting.** A crash dump holds what was in memory and may be uploaded to Microsoft. Sorla excludes `Sorla.exe` from error reporting for the current user.
+
+`windows\tests\privacy\NetWatch.cs` checks this: it runs a transcription, launches the tray app, makes a full dictation and idles, while recording every TCP connection and UDP port the Sorla process owns (polling Windows' connection tables every few ms, with a positive control that does go online).
+
+```powershell
+dotnet run windows\tests\privacy\NetWatch.cs -- <path to Sorla.exe> <speech.wav> %LOCALAPPDATA%\Sorla\models\pianissimo-sv-onnx
+```
+
+What Sorla cannot control: the app you dictate into (Teams, a browser) sends the text it receives, like anything you type. Text Sorla leaves on the clipboard (when you switched windows) can be read by other apps; it is marked to stay out of Win+V history and cloud clipboard. Microsoft Defender may send unknown program files (Sorla.exe, not your data) to Microsoft for scanning, depending on its sample submission setting.
 
 ## Using it
 

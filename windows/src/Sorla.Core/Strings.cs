@@ -98,6 +98,15 @@ public static class Strings
         ["about.title"] = "About Sorla",
         ["about.body"] = "Sorla for Windows {0}\n\nPush-to-talk dictation in Swedish, running entirely on this PC.\n\nSpeech recognition: Klang Pianissimo by Klang AI AB (CC BY 4.0), fine-tuned from NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0). Runs with ONNX Runtime (MIT). Audio with NAudio (MIT).\n\nBased on Sorla for Mac by Anders Markstrom (Apache 2.0). This Windows port is independent and not made or endorsed by Klang AI AB or the original author.",
         ["tray.firstRun"] = "Sorla is running here. Hold {0} and speak.",
+        ["settings.microphone"] = "Microphone",
+        ["settings.microphoneDefault"] = "Windows default ({0})",
+        ["settings.ready"] = "Keep microphone ready",
+        ["settings.readyHelp"] = "Opening a microphone takes a moment: about 0.2 s for a built-in one, over a second for Bluetooth headphones. Kept ready, the next dictation starts at once. Meanwhile Windows shows the microphone as in use, Bluetooth headphones stay in headset mode (music sounds worse), and only the last 0.3 s is held in memory.",
+        ["ready.off"] = "Off (open only while dictating)",
+        ["ready.oneMinute"] = "1 minute after a dictation",
+        ["ready.fiveMinutes"] = "5 minutes after a dictation",
+        ["ready.always"] = "Always (no delay at all)",
+        ["note.micTooLate"] = "The microphone was not ready yet. Wait for the tone before you speak.",
     };
 
     internal static IReadOnlyDictionary<string, string> Swedish { get; } = new Dictionary<string, string>
@@ -177,5 +186,14 @@ public static class Strings
         ["about.title"] = "Om Sorla",
         ["about.body"] = "Sorla för Windows {0}\n\nDiktering på svenska som körs helt på den här datorn.\n\nTaligenkänning: Klang Pianissimo av Klang AI AB (CC BY 4.0), finjusterad från NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0). Körs med ONNX Runtime (MIT). Ljud via NAudio (MIT).\n\nBygger på Sorla för Mac av Anders Markström (Apache 2.0). Den här Windows-versionen är fristående och inte gjord eller godkänd av Klang AI AB eller ursprungsförfattaren.",
         ["tray.firstRun"] = "Sorla körs här. Håll {0} och prata.",
+        ["settings.microphone"] = "Mikrofon",
+        ["settings.microphoneDefault"] = "Windows standard ({0})",
+        ["settings.ready"] = "Håll mikrofonen redo",
+        ["settings.readyHelp"] = "Det tar en stund att öppna en mikrofon: cirka 0,2 s för den inbyggda, över en sekund för Bluetooth-hörlurar. Hålls den redo startar nästa diktering direkt. Under tiden visar Windows att mikrofonen används, Bluetooth-hörlurar stannar i headsetläge (musik låter sämre) och bara de senaste 0,3 s finns i minnet.",
+        ["ready.off"] = "Av (öppen bara medan du dikterar)",
+        ["ready.oneMinute"] = "1 minut efter en diktering",
+        ["ready.fiveMinutes"] = "5 minuter efter en diktering",
+        ["ready.always"] = "Alltid (ingen fördröjning alls)",
+        ["note.micTooLate"] = "Mikrofonen hann inte starta. Vänta på tonen innan du pratar.",
     };
 }

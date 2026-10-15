@@ -36,8 +36,39 @@ public static class TriggerKeys
     };
 }
 
+// How long the microphone stays open after a dictation, so the next one starts at once.
+public enum MicrophoneReadiness
+{
+    Off,
+    OneMinute,
+    FiveMinutes,
+    Always,
+}
+
+public static class MicrophoneReadinessExtensions
+{
+    public static TimeSpan KeepWarm(this MicrophoneReadiness readiness) => readiness switch
+    {
+        MicrophoneReadiness.Off => TimeSpan.Zero,
+        MicrophoneReadiness.FiveMinutes => TimeSpan.FromMinutes(5),
+        MicrophoneReadiness.Always => Timeout.InfiniteTimeSpan,
+        _ => TimeSpan.FromMinutes(1),
+    };
+
+    public static string DisplayName(this MicrophoneReadiness readiness) => Strings.Get(readiness switch
+    {
+        MicrophoneReadiness.Off => "ready.off",
+        MicrophoneReadiness.FiveMinutes => "ready.fiveMinutes",
+        MicrophoneReadiness.Always => "ready.always",
+        _ => "ready.oneMinute",
+    });
+}
+
 public sealed class Settings
 {
+    // Empty means the Windows default recording device.
+    public string MicrophoneId { get; set; } = "";
+    public MicrophoneReadiness MicrophoneReadiness { get; set; } = MicrophoneReadiness.OneMinute;
     public TriggerKey TriggerKey { get; set; } = TriggerKeys.Default;
     public RecordingMode RecordingMode { get; set; } = RecordingMode.PushToTalk;
     public bool KeepClipboardContent { get; set; } = true;

@@ -8,12 +8,18 @@ namespace Sorla;
 
 internal static class Program
 {
-    private const string QuitEventName = @"Local\Sorla-Windows-quit";
-    private const string ShowEventName = @"Local\Sorla-Windows-show";
+    // A separate data folder (SORLA_DATA_DIR, used by tests) is a separate instance, so a test never reaches the
+    // Sorla the user is running.
+    private static readonly string InstanceSuffix = Environment.GetEnvironmentVariable("SORLA_DATA_DIR") is { Length: > 0 } dir
+        ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(dir.ToLowerInvariant())))[..12]
+        : "";
+    private static readonly string QuitEventName = $@"Local\Sorla-Windows-quit{InstanceSuffix}";
+    private static readonly string ShowEventName = $@"Local\Sorla-Windows-show{InstanceSuffix}";
 
     [STAThread]
     private static int Main(string[] args)
     {
+        Privacy.Apply();
         // Command-line transcription of WAV files, for scripts and for checking the model without the tray app.
         if (args.Length >= 2 && args[0] == "--transcribe") return TranscribeFiles(args[1..]);
         if (args.Length == 1 && args[0] == "--mic-check") return CheckMicrophone();
@@ -26,7 +32,7 @@ internal static class Program
             return 0;
         }
 
-        using var instance = new Mutex(true, @"Local\Sorla-Windows-2f8c1d", out var isFirst);
+        using var instance = new Mutex(true, $@"Local\Sorla-Windows-2f8c1d{InstanceSuffix}", out var isFirst);
         if (!isFirst)
         {
             // Starting Sorla again while it runs opens its window instead of a second copy.
@@ -38,7 +44,7 @@ internal static class Program
         var fakeMic = Option(args, "--fake-mic");
         // Test runs only ever paste into the test window; a fake microphone without a guard gets the default one.
         var pasteGuard = Option(args, "--paste-only-into") ?? (fakeMic != null ? "TestTarget" : null);
-        Func<IAudioSource> createSource = fakeMic != null ? () => new FileAudioSource(fakeMic) : () => new MicrophoneSource();
+        Func<string?, IAudioSource> createSource = fakeMic != null ? _ => new FileAudioSource(fakeMic) : id => new MicrophoneSource(id);
 
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
@@ -49,6 +55,7 @@ internal static class Program
         Log.Info($"Sorla {AppVersion.Current} starting{(fakeMic != null ? " with fake microphone" : "")}");
         var app = new TrayApp(Settings.Load(), createSource, pasteGuard);
         if (args.Contains("--settings")) app.ShowSettings();
+        if (fakeMic != null && Option(args, "--auto-dictate") is { } seconds) app.AutoDictate(TimeSpan.FromSeconds(double.Parse(seconds, System.Globalization.CultureInfo.InvariantCulture)));
         var context = SynchronizationContext.Current!;
         var quitWait = ThreadPool.RegisterWaitForSingleObject(quit, (_, _) => context.Post(_ => app.ExitThread(), null), null, -1, executeOnlyOnce: true);
         var showWait = ThreadPool.RegisterWaitForSingleObject(show, (_, _) => context.Post(_ => app.ShowWelcome(), null), null, -1, executeOnlyOnce: false);
@@ -65,34 +72,35 @@ internal static class Program
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 
-    // Opens the default microphone for two seconds and reports what arrived; the audio is never kept.
+    // Opens each microphone and reports how long until audio arrives, as Sorla would open it
+    // cold and then warm. The audio is never kept; only counts and levels are printed.
     private static int CheckMicrophone()
     {
         Native.AttachConsole(-1);
-        Console.WriteLine($"devices: {NAudio.Wave.WaveIn.DeviceCount}, first: {MicrophoneSource.DefaultDeviceName ?? "none"}");
-        long count = 0;
-        float peak = 0;
-        using var source = new MicrophoneSource();
-        source.Frames += frames =>
+        var settings = Settings.Load();
+        var devices = MicrophoneSource.Devices();
+        Console.WriteLine($"default: {MicrophoneSource.DefaultDeviceName ?? "none"}; chosen in settings: {(settings.MicrophoneId.Length == 0 ? "Windows default" : MicrophoneSource.Resolve(settings.MicrophoneId)?.Name ?? "missing")}");
+        var result = 4;
+        foreach (var device in devices)
         {
-            Interlocked.Add(ref count, frames.Length);
-            foreach (var s in frames) peak = Math.Max(peak, Math.Abs(s));
-        };
-        var clock = Stopwatch.StartNew();
-        try
-        {
-            source.Start();
+            using var microphone = new MicrophoneService(() => new MicrophoneSource(device.Id)) { KeepWarm = Timeout.InfiniteTimeSpan };
+            foreach (var attempt in new[] { "cold", "warm" })
+            {
+                var clock = Stopwatch.StartNew();
+                var capture = microphone.Begin();
+                using var ready = new ManualResetEventSlim(capture.IsReady);
+                capture.Ready += _ => ready.Set();
+                capture.Failed += _ => ready.Set();
+                ready.Wait(TimeSpan.FromSeconds(5));
+                var readyAfter = clock.ElapsedMilliseconds;
+                Thread.Sleep(1000);
+                var (samples, peak) = microphone.End(capture);
+                var status = capture.Failure != null ? $"failed: {capture.Failure.Message}" : capture.IsReady ? $"ready after {readyAfter} ms" : "no audio within 5 s";
+                Console.WriteLine($"{device.Name}, {attempt}: {status}, {samples.Length} samples, peak {peak:F3}");
+                if (capture.IsReady) result = 0;
+            }
         }
-        catch (Exception e)
-        {
-            Console.WriteLine($"microphone failed to start: {e.Message}");
-            return 3;
-        }
-        var opened = clock.ElapsedMilliseconds;
-        Thread.Sleep(2000);
-        source.Stop();
-        Console.WriteLine($"opened in {opened} ms, {count} samples in 2 s ({count / 2.0:F0}/s), peak {peak:F4}");
-        return count > 0 ? 0 : 4;
+        return result;
     }
 
     private static int TranscribeFiles(string[] files)
