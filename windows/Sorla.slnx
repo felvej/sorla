@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sorla.Core/Sorla.Core.csproj" />
+    <Project Path="src/Sorla/Sorla.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sorla.Core.Tests/Sorla.Core.Tests.csproj" />
+  </Folder>
+</Solution>

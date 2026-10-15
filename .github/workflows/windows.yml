@@ -1,0 +1,41 @@
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build windows/Sorla.slnx -c Release
+
+      # The model test skips itself here: CI never downloads the 660 MB model.
+      - name: Test
+        run: dotnet test windows/Sorla.slnx -c Release --no-build
+
+      - name: Publish
+        shell: pwsh
+        run: ./windows/scripts/publish.ps1 -Zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sorla-win-x64
+          path: windows/artifacts/Sorla-win-x64.zip

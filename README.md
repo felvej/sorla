@@ -1,124 +1,124 @@
-# Sorla
+# Sorla for Windows
 
-**Talk. Release. Done.**
+**Talk. Release. Done.** (Prata. Släpp. Klart.)
 
-Sorla is push-to-talk dictation for the Mac. Hold a key (Right ⌘ by default), speak Swedish, and let go. The text is pasted where your cursor is, in whatever app you're using.
+Push-to-talk Swedish dictation for Windows. Hold **Right Ctrl**, speak Swedish, let go. The text is pasted where your cursor is, in whatever app you are using.
 
-Sorla lives in the menu bar and stays out of the way until you use it. Speech recognition runs entirely on your Mac, on the Apple Neural Engine. No account, no cloud, no analytics.
+This is a fork of [markstrom/sorla](https://github.com/markstrom/sorla), the Mac app, ported to Windows. Speech recognition runs entirely on your PC, on the CPU, with [Klang Pianissimo](https://huggingface.co/KlangAI/pianissimo-sv). No account, no cloud, no analytics. After the one-time model download Sorla works fully offline.
 
-**[Download Sorla](https://github.com/markstrom/sorla/releases/latest)** · **[Website: sorla.zerolabs.se](https://sorla.zerolabs.se)** · [Help (Swedish)](https://sorla.zerolabs.se/support) · [Privacy](https://sorla.zerolabs.se/privacy)
-
-## Built on Klang Pianissimo
-
-Sorla understands Swedish thanks to **Klang Pianissimo**, a Swedish speech recognition model by **Klang AI AB**, released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-
-- Model: [KlangAI/pianissimo-sv](https://huggingface.co/KlangAI/pianissimo-sv)
-- Pianissimo is fine-tuned from [NVIDIA Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (CC BY 4.0).
-- Sorla runs a Core ML conversion of Pianissimo with unchanged weights: [markstrom/pianissimo-sv-coreml](https://huggingface.co/markstrom/pianissimo-sv-coreml).
-
-Thank you, Klang, for building Pianissimo and sharing it openly. Sorla would not exist without it.
-
-> Sorla is an independent app. It is not made, endorsed or supported by Klang AI AB.
-
-Sorla also builds on:
-
-- [FluidAudio](https://github.com/FluidInference/FluidAudio) (Apache-2.0), which runs the model with Core ML.
-- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) (MIT), for custom shortcuts.
+The original Mac app and its documentation are unchanged in this repository (`Sources/`, `Tests/`, [README.mac.md](README.mac.md)). The Windows app is in [`windows/`](windows).
 
 ## Features
 
 - **Push to talk or toggle.** Hold the key while you speak, or press once to start and once more to stop.
-- **Your key.** Right ⌘ by default. Pick Right ⌥, Right ⌃ or a custom shortcut instead.
-- **A small indicator** at the top of the screen, with a live waveform while you speak.
-- **Paste Last.** ⌃⌥V pastes the most recent text again, wherever you are now. The text is kept for five minutes, and forgotten at once when the screen locks or the Mac sleeps. Turn off **Keep last transcription** in Settings and Sorla itself keeps no text for Paste Last once it has been pasted. The clipboard is separate: the text stays on it when **Put back what you had copied** is off, or when you switched apps before the text was ready. A paste that macOS blocks never changes the clipboard.
-- **Your clipboard is kept.** Whatever you had copied is still there after Sorla pastes.
-- **Help when something is in the way.** If a dictation or paste is blocked by something only you can fix (a missing permission, the speech model, a microphone that won't start, a restart after an update), Sorla opens a window that says what and offers the fix, after you let go of the key. Choose **Not now** and it won't ask again about the same problem until Sorla restarts. No notifications.
-- Soft start and stop sounds, and optional launch at login.
-- English and Swedish user interface.
-- Text appears when you let go, not while you speak: Klang Pianissimo transcribes a whole utterance at once and isn't built for streaming, and transcribing in chunks would mean worse text. From release to text takes about half a second.
+- **Your key.** Right Ctrl by default. Right Alt (AltGr), Right Shift or Scroll Lock instead.
+- **Shortcuts still work.** Right Ctrl+C, Ctrl+click and so on call the dictation off instead of recording. Esc cancels a dictation.
+- **A small indicator** at the top of the screen with a live waveform while you speak. It never takes focus.
+- **No lost first words.** The start tone and the red dot come when the microphone is actually listening (a grey ring means it is still opening). Opening takes about 0.2 s for a built-in microphone and over a second for Bluetooth headphones, so by default the microphone stays ready for a minute after each dictation: the next one starts at once and includes the last 0.3 s before the key went down. Choose Off, 1 minute, 5 minutes or Always in Settings, and which microphone to use. While it is ready Windows shows the microphone as in use and Bluetooth headphones stay in headset mode; only the last 0.3 s is held, in memory.
+- **Paste Last** with Ctrl+Alt+V pastes the most recent text again. It is kept in memory for five minutes and forgotten at once when you lock the PC or it goes to sleep. Turn off *Keep last transcription* and nothing is kept.
+- **Your clipboard is kept.** Whatever you had copied is put back after Sorla pastes. Dictated text is marked so it stays out of Win+V clipboard history and cloud clipboard sync.
+- **Never pastes into the wrong window.** If you switch windows before the text is ready, it is put on the clipboard instead, with a note on the indicator.
+- Soft start and stop sounds (the same ones as on the Mac), launch at sign-in, Swedish and English interface (follows the Windows display language).
+- Recordings stop by themselves after five minutes, so a forgotten toggle never keeps the microphone open.
 
 ## Requirements
 
-- A Mac with Apple Silicon (M1 or later)
-- macOS 14 Sonoma or later
-- About 700 MB of free space for the speech model, which is downloaded on first launch
+- Windows 10 or 11, 64-bit (x64)
+- [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (or use the self-contained build)
+- About 700 MB free space for the speech model, about 1.5 GB RAM while running
+- A microphone, with *Let desktop apps access your microphone* on in Settings > Privacy & security > Microphone
+
+No administrator rights are needed for anything.
 
 ## Install
 
-1. Download the DMG from [the website](https://sorla.zerolabs.se) or the [latest release](https://github.com/markstrom/sorla/releases/latest).
-2. Open it and drag **Sorla** to **Applications**.
-3. Open Sorla from the Applications folder.
-4. Grant **Microphone** and **Device Control and Data Access** (Accessibility in older macOS) access. The welcome window walks you through both, downloads the model and lets you try dictating in the window itself. It also has the two update switches, automatic checks and automatic installation, both off by default.
-5. Hold Right ⌘ and speak.
+Build and install for your own user (puts Sorla in `%LOCALAPPDATA%\Programs\Sorla` and adds it to the Start menu):
 
-Or with [Homebrew](https://brew.sh):
-
-```sh
-brew install --cask markstrom/tap/sorla
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\scripts\publish.ps1 -Install
 ```
 
-Update later with `brew upgrade --cask sorla`.
+On first start the welcome window downloads the model (Klang's own ONNX export, `KlangAI/pianissimo-sv-onnx`, int8, 660 MB) from Hugging Face. Each file is pinned to one revision and checked against its SHA-256 before it is used. Then hold Right Ctrl in the test box and speak.
 
-### Updates
-
-Sorla can update itself. When **Check for Updates…** in the menu (or **Check Now** in Settings › Updates) finds a newer version, choose **Install and Relaunch** there or in the menu's status row. Sorla downloads that exact release from GitHub, checks that it is signed by Sorla's developer, notarized by Apple and the version that was found, swaps it in at the same path, and relaunches in a few seconds, waiting for any dictation in flight. The previous version stays next to it until the new one has started. If anything fails, the current version is kept.
-
-With both **Check for updates automatically** and **Install updates automatically** turned on (both are off by default), Sorla downloads and verifies a new version in the background and installs it once you haven't dictated for 10 minutes, or at its next launch.
-
-If Sorla can't replace itself (a folder you can't write to, or a copy macOS runs from a temporary location), it offers **Download** instead. A Homebrew install is updated with `brew upgrade --cask sorla`.
-
-### If macOS blocks the app
-
-Sorla is signed with Developer ID and notarized by Apple, so this is rare. Step-by-step help, including what to do if Device Control and Data Access (Accessibility in older macOS) won't turn on, is on the [help page](https://sorla.zerolabs.se/support#oppna) (in Swedish).
-
-If macOS says Sorla can't be opened, either:
-
-- open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**, or
-- remove the quarantine flag in Terminal:
-
-  ```sh
-  xattr -dr com.apple.quarantine /Applications/Sorla.app
-  ```
+To install the model without Sorla downloading it (for example on a PC without internet), put these files from [KlangAI/pianissimo-sv-onnx](https://huggingface.co/KlangAI/pianissimo-sv-onnx) in `%LOCALAPPDATA%\Sorla\models\pianissimo-sv-onnx`: `config.json`, `nemo128.onnx`, `vocab.txt`, `encoder-model.int8.onnx`, `decoder_joint-model.int8.onnx`.
 
 ## Privacy
 
-Your voice and your text never leave your Mac. Audio is processed in memory and never saved. The last text stays in memory for Paste Last for at most five minutes, or not at all with Keep last transcription turned off.
+Your voice and your text never leave your PC. Audio is held in memory only while it is transcribed and never written to disk. The log (`%LOCALAPPDATA%\Sorla\sorla.log`) holds timings and errors, never what you said.
 
-Sorla uses the network only to:
+Sorla uses the network for one thing only: downloading the speech model from Hugging Face, when you click Download. There is no update check, no telemetry and no other network traffic.
 
-- download the speech model from Hugging Face on first launch,
-- check for updates, asking GitHub for the latest app version and Hugging Face for a newer model in one check, only when you ask it to or, if you turn it on, automatically about once a day, and
-- download a new version of Sorla from GitHub, only when you choose Install and Relaunch or have turned on both automatic checks and automatic installs. Before installing it, macOS asks Apple whether it is notarized.
+Two things in Windows could otherwise carry data out, and Sorla switches both off for itself at launch:
 
-There are no accounts, no analytics and no tracking. Once the model is installed, Sorla works offline. Read the full [privacy policy](https://sorla.zerolabs.se/privacy).
+- **ONNX Runtime telemetry.** Official ONNX Runtime builds emit usage events through Windows' diagnostics system (ETW), which Windows may upload depending on your diagnostic data setting. Sorla calls `DisableTelemetryEvents()` before loading the model.
+- **Windows Error Reporting.** A crash dump holds what was in memory and may be uploaded to Microsoft. Sorla excludes `Sorla.exe` from error reporting for the current user.
 
-## Principles
+`windows\tests\privacy\NetWatch.cs` checks this: it runs a transcription, launches the tray app, makes a full dictation and idles, while recording every TCP connection and UDP port the Sorla process owns (polling Windows' connection tables every few ms, with a positive control that does go online).
 
-Every feature in Sorla is weighed against [the Sorla Manifesto](MANIFESTO.md): one purpose, nothing leaves the Mac, never make the user wait, calm by default.
+```powershell
+dotnet run windows\tests\privacy\NetWatch.cs -- <path to Sorla.exe> <speech.wav> %LOCALAPPDATA%\Sorla\models\pianissimo-sv-onnx
+```
+
+What Sorla cannot control: the app you dictate into (Teams, a browser) sends the text it receives, like anything you type. Text Sorla leaves on the clipboard (when you switched windows) can be read by other apps; it is marked to stay out of Win+V history and cloud clipboard. Microsoft Defender may send unknown program files (Sorla.exe, not your data) to Microsoft for scanning, depending on its sample submission setting.
+
+## Using it
+
+| | |
+|---|---|
+| Hold **Right Ctrl**, speak, release | Dictate (push to talk) |
+| **Esc** while recording | Cancel |
+| **Ctrl+Alt+V** | Paste Last |
+| Tray icon | Status, Start/Stop Dictation, Settings, Getting Started, Quit |
+
+Starting Sorla again while it runs opens its window. `Sorla.exe --quit` quits it.
+
+Pasting into an app that runs as administrator only works if Sorla runs as administrator too (a Windows rule). The text is still on the clipboard.
 
 ## Building from source
 
-Sorla is a Swift package. You need Xcode (or the Swift toolchain) for macOS 14 or later.
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (a per-user install without admin works: `dotnet-install.ps1 -Channel 10.0`).
 
-```sh
-swift build                 # debug build
-swift test                  # run the tests
-Scripts/build-app.sh        # build and sign .build/Sorla.app
-Scripts/release.sh          # build a signed DMG in .build/release-artifacts
+```powershell
+dotnet build windows\Sorla.slnx -c Release      # build
+dotnet test windows\Sorla.slnx -c Release       # unit tests, plus a real-model test if the model is installed
+windows\scripts\publish.ps1 [-SelfContained] [-Zip] [-Install]
 ```
 
-`Scripts/build-app.sh` signs with the hardened runtime, using the first Apple Development identity in your keychain, or ad hoc if there is none. Set `SORLA_SIGN_IDENTITY` to choose another identity.
+Command-line helpers, handy for checking a PC:
 
-`Scripts/release.sh` signs with a Developer ID Application identity when one is available and falls back to Apple Development. With a Developer ID identity, `SORLA_NOTARIZE=1 Scripts/release.sh` also notarizes and staples the DMG. Notarizing reads your App Store Connect API key details from `~/.config/sorla/release.env`, outside the repository; copy `Scripts/release.env.example` there and fill it in.
+```powershell
+Sorla.exe --transcribe file.wav [more.wav]   # transcribe WAV files with the installed model
+Sorla.exe --mic-check                        # open the microphone for 2 s and report the level (nothing is kept)
+```
+
+### End-to-end test
+
+`windows\tests\e2e\run-e2e.ps1` runs the real tray app with a WAV file in place of the microphone, drives it with injected key presses into a test window, and checks that the text is pasted, the clipboard is restored, Paste Last, Esc and the shortcut rule work, and that no dictated text reaches the log. It takes about a minute and needs the keyboard and focus: don't touch the PC while it runs. In this mode Sorla only ever pastes into the test window. Test speech is made with Windows' own Swedish voice by `windows\scripts\make-test-audio.ps1`.
+
+### How it works
+
+| Part | File |
+|---|---|
+| Model: preprocessor, FastConformer encoder and greedy TDT decoding on ONNX Runtime | `windows/src/Sorla.Core/Transcription/` |
+| Push-to-talk gesture (port of the Mac state machine) | `windows/src/Sorla.Core/Dictation/PushToTalkGesture.cs` |
+| Keyboard and mouse hook on its own thread | `windows/src/Sorla/Platform/InputHook.cs` |
+| Microphone (16 kHz mono via the Windows mixer) | `windows/src/Sorla/Platform/AudioCapture.cs` |
+| Clipboard and Ctrl+V | `windows/src/Sorla/Platform/ClipboardPaster.cs` |
+| Recording, transcription and delivery in order | `windows/src/Sorla/DictationController.cs` |
+| Indicator (layered, click-through, never focused) | `windows/src/Sorla/UI/RecordingIndicator.cs` |
+
+## Built on Klang Pianissimo
+
+Sorla understands Swedish thanks to **Klang Pianissimo**, a Swedish speech recognition model by **Klang AI AB**, released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Sorla for Windows runs Klang's ONNX export, [KlangAI/pianissimo-sv-onnx](https://huggingface.co/KlangAI/pianissimo-sv-onnx). Pianissimo is fine-tuned from [NVIDIA Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (CC BY 4.0).
+
+> Sorla for Windows is independent. It is not made, endorsed or supported by Klang AI AB or by the author of Sorla for Mac.
 
 ## License
 
-Sorla is open source under the [Apache License 2.0](LICENSE). Copyright 2026 Anders Markström.
-
-Third-party components keep their own licenses, which are included in [`Resources/Licenses`](Resources/Licenses) and shipped with the app:
+Apache License 2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE). Sorla for Mac is copyright 2026 Anders Markström. Third-party licenses are in [`Resources/Licenses`](Resources/Licenses) and are shipped with the app:
 
 | Component | License |
 |---|---|
 | Klang Pianissimo (Klang AI AB), based on NVIDIA Parakeet TDT 0.6B v3 | [CC BY 4.0](Resources/Licenses/Pianissimo.txt) |
-| FluidAudio | [Apache-2.0](Resources/Licenses/FluidAudio/LICENSE) |
-| KeyboardShortcuts | [MIT](Resources/Licenses/KeyboardShortcuts/LICENSE) |
+| ONNX Runtime (Microsoft) | [MIT](Resources/Licenses/OnnxRuntime/LICENSE) |
+| NAudio | [MIT](Resources/Licenses/NAudio/LICENSE) |

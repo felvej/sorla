@@ -3,3 +3,10 @@ Copyright 2026 Anders Markström
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 Third-party licenses are in Resources/Licenses.
+
+Sorla for Windows (the windows/ folder) is a port of Sorla to Windows, added in this fork.
+It is not made or endorsed by the original author or by Klang AI AB. It uses:
+- Klang Pianissimo ONNX (KlangAI/pianissimo-sv-onnx), CC BY 4.0, Klang AI AB,
+  fine-tuned from NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0).
+- ONNX Runtime (MIT), Microsoft.
+- NAudio (MIT), Mark Heath and contributors.
