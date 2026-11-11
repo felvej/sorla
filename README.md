@@ -24,19 +24,27 @@ The original Mac app and its documentation are unchanged in this repository (`So
 ## Requirements
 
 - Windows 10 or 11, 64-bit (x64)
-- [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (or use the self-contained build)
-- About 700 MB free space for the speech model, about 1.5 GB RAM while running
+- About 1 GB free space (app about 135 MB, speech model 660 MB), about 1.5 GB RAM while running
 - A microphone, with *Let desktop apps access your microphone* on in Settings > Privacy & security > Microphone
 
-No administrator rights are needed for anything.
+Nothing else needs to be installed first, and no administrator rights are needed for anything. The install script fetches the .NET 10 SDK for your user if it is missing, and the installed app carries its own .NET runtime.
 
 ## Install
 
-Build and install for your own user (puts Sorla in `%LOCALAPPDATA%\Programs\Sorla` and adds it to the Start menu):
+**Easiest:** download `Sorla-win-x64.zip` from the [latest release](https://github.com/felvej/sorla/releases/latest), unpack it to a folder you keep (for example `%LOCALAPPDATA%\Programs\Sorla`) and run `Sorla.exe`. The app is not code-signed, so Windows SmartScreen may say "Windows protected your PC": choose **More info > Run anyway**.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File windows\scripts\publish.ps1 -Install
-```
+**From source:**
+
+1. Get the code: either `git clone https://github.com/felvej/sorla.git`, or on GitHub choose **Code > Download ZIP** and unpack it.
+2. Open PowerShell in that folder and run:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File windows\scripts\publish.ps1 -Install
+   ```
+
+   This takes a few minutes the first time (it may download the .NET 10 SDK, about 250 MB, from Microsoft). It installs Sorla in `%LOCALAPPDATA%\Programs\Sorla`, adds it to the Start menu and starts it.
+
+Run the same command again later to update; your settings and the model are kept.
 
 On first start the welcome window downloads the model (Klang's own ONNX export, `KlangAI/pianissimo-sv-onnx`, int8, 660 MB) from Hugging Face. Each file is pinned to one revision and checked against its SHA-256 before it is used. Then hold Right Ctrl in the test box and speak.
 
@@ -81,7 +89,7 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (a
 ```powershell
 dotnet build windows\Sorla.slnx -c Release      # build
 dotnet test windows\Sorla.slnx -c Release       # unit tests, plus a real-model test if the model is installed
-windows\scripts\publish.ps1 [-SelfContained] [-Zip] [-Install]
+windows\scripts\publish.ps1 [-Zip] [-Install] [-FrameworkDependent]   # self-contained unless -FrameworkDependent
 ```
 
 Command-line helpers, handy for checking a PC:
